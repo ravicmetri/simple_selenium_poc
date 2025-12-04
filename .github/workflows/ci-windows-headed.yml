@@ -1,0 +1,50 @@
+name: CI - Selenium TestNG (Windows - Headed Chrome)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  windows-headed-tests:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Show Java & Chrome version
+        shell: powershell
+        run: |
+          java -version
+          Write-Host "Chrome version:"
+          (Get-Item 'C:\Program Files\Google\Chrome\Application\chrome.exe').VersionInfo.ProductVersion
+
+      - name: Run Maven tests (headed Chrome)
+        env:
+          CI: true
+          RUN_HEADED: "true"   # signal to test code to run headed
+        run: mvn -B -V clean test
+
+      - name: Upload Surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: target/surefire-reports/
+
+      - name: Upload chromedriver log (if created)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromedriver-log
+          path: target/chromedriver.log
