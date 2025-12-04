@@ -2,20 +2,20 @@
 <testng-results ignored="0" total="1" passed="1" failed="0" skipped="0">
   <reporter-output>
   </reporter-output>
-  <suite started-at="2025-12-04T23:57:45 IST" name="POC Suite" finished-at="2025-12-04T23:57:55 IST" duration-ms="9900">
+  <suite started-at="2025-12-05T00:45:23 IST" name="POC Suite" finished-at="2025-12-05T00:45:33 IST" duration-ms="9917">
     <groups>
     </groups>
-    <test started-at="2025-12-04T23:57:45 IST" name="DummyTests" finished-at="2025-12-04T23:57:55 IST" duration-ms="9900">
+    <test started-at="2025-12-05T00:45:23 IST" name="DummyTests" finished-at="2025-12-05T00:45:33 IST" duration-ms="9917">
       <class name="com.example.poc.SimpleTest">
-        <test-method is-config="true" signature="setUp()[pri:0, instance:com.example.poc.SimpleTest@351d00c0]" started-at="2025-12-04T23:57:45 IST" name="setUp" finished-at="2025-12-04T23:57:47 IST" duration-ms="2099" status="PASS">
+        <test-method is-config="true" signature="setUp()[pri:0, instance:com.example.poc.SimpleTest@351d00c0]" started-at="2025-12-05T00:45:23 IST" name="setUp" finished-at="2025-12-05T00:45:25 IST" duration-ms="2195" status="PASS">
           <reporter-output>
           </reporter-output>
         </test-method> <!-- setUp -->
-        <test-method signature="openDummyUrl()[pri:0, instance:com.example.poc.SimpleTest@351d00c0]" started-at="2025-12-04T23:57:47 IST" name="openDummyUrl" finished-at="2025-12-04T23:57:54 IST" duration-ms="7572" status="PASS">
+        <test-method signature="openDummyUrl()[pri:0, instance:com.example.poc.SimpleTest@351d00c0]" started-at="2025-12-05T00:45:25 IST" name="openDummyUrl" finished-at="2025-12-05T00:45:32 IST" duration-ms="7500" status="PASS">
           <reporter-output>
           </reporter-output>
         </test-method> <!-- openDummyUrl -->
-        <test-method is-config="true" signature="tearDown()[pri:0, instance:com.example.poc.SimpleTest@351d00c0]" started-at="2025-12-04T23:57:54 IST" name="tearDown" finished-at="2025-12-04T23:57:55 IST" duration-ms="201" status="PASS">
+        <test-method is-config="true" signature="tearDown()[pri:0, instance:com.example.poc.SimpleTest@351d00c0]" started-at="2025-12-05T00:45:32 IST" name="tearDown" finished-at="2025-12-05T00:45:33 IST" duration-ms="197" status="PASS">
           <reporter-output>
           </reporter-output>
         </test-method> <!-- tearDown -->
