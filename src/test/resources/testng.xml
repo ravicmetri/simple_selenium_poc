@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "../../../testng-1.0.dtd">
+<suite name="POC Suite">
+    <test name="DummyTests">
+        <classes>
+            <class name="com.example.poc.SimpleTest"/>
+        </classes>
+    </test>
+</suite>
