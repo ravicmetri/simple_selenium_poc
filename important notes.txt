@@ -1,0 +1,529 @@
+already we are into maven now.
+ 
+ok 
+if its a fresh from scratch then we have choice to gradle but i recommend NO as of now.
+ 
+the things we dont know will not explore at this point in time as Gradle is new term for me too
+ 
+Manisha Sahu
+the things we dont know will not explore at this point in time as Gradle is new term for me too
+yes Manisha, I know Gradle things but our team doesn't know this , so what we have in our bucket lets explore to those, 
+we can migrate to gradle but it will be bit complicated.
+ 
+So whatever I discussed and shared example is now changed it according to Maven
+ 
+as below
+ 
+with 2 options
+ 
+Got some info from google
+ 
+Shards = parallel jobs
+Example:
+
+If you run 6 shards, GitHub spins up 6 runners in parallel.
+ GitHub does NOT charge for sharding
+There is no surcharge, no special feature fee.
+But sharding uses more minutes
+Example:
+Serial run = 1 job × 10 minutes = 10 minutes billed
+5 shards = 5 jobs × 10 minutes each = 50 minutes billed
+ 
+Parallel build & test across JDK versions and modules (matrix).
+Optional test sharding (split the test suite across N parallel workers).
+Coverage aggregation (JaCoCo) from all parallel runs.
+Release packaging (combine artifacts and publish a GitHub Release).
+Controls: caching, fail-fast, max-parallel, and concurrency protection for releases.
+Replace placeholders like modules: [commons, api, web, worker] with your real module names. If you prefer dynamic module discovery, use Option B below.
+ 
+# .github/workflows/java-maven-matrix.yml
+name: Java Maven Matrix CI/CD
+ 
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+ 
+jobs:
+  build-test:
+    # matrix fans out parallel jobs per module × JDK
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false               # keep other parallel runs going
+      max-parallel: 8                # throttle if infra is sensitive
+      matrix:
+        os: [ubuntu-latest]          # add windows-latest/macos-latest if needed
+        java: [17, 21]               # LTS versions
+        module: [commons, api, web, worker]    # <— YOUR MODULES HERE
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - name: Set up Java ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+ 
+      # If you have special test-selection logic, set it here.
+      # Examples:
+      # -Dtest=MyClassTest,AnotherTest
+      # -Dgroups=unit
+      - name: Build & test module
+        run: |
+          mvn -B -pl ${{ matrix.module }} -am \
+            -Dstyle.color=always \
+            clean verify
+ 
+      # Upload artifacts produced by the module (JARs, reports)
+      - name: Upload module jar(s)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-${{ matrix.module }}-jdk${{ matrix.java }}
+          path: "**/${{ matrix.module }}/target/*.jar"
+ 
+      - name: Upload JaCoCo exec/report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.module }}-jdk${{ matrix.java }}
+          path: |
+            **/${{ matrix.module }}/target/jacoco.exec
+            **/${{ matrix.module }}/target/site/jacoco/*
+            **/${{ matrix.module }}/target/surefire-reports/*
+ 
+----Aggregation, release & concurrency
+ 
+  aggregate-coverage-and-release:
+    needs: build-test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+ 
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - name: Set up Java 21 (for aggregation)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+ 
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+ 
+      # If you use the JaCoCo aggregator pattern in Maven (recommended),
+      # just run `mvn -B verify` on the parent/aggregator to produce a combined report.
+      - name: Merge coverage & build aggregate report
+        run: |
+          # Example: use JaCoCo merge goal if you don't have aggregator POM
+          # (collect all jacoco.exec files and merge them)
+          EXEC_FILES=$(find artifacts -name 'jacoco.exec' | tr '\n' ' ')
+          if [ -n "$EXEC_FILES" ]; then
+            mvn -B org.jacoco:jacoco-maven-plugin:0.8.10:merge \
+              -DdestFile=target/jacoco-merged.exec \
+              -Dfiles="$EXEC_FILES"
+            mvn -B org.jacoco:jacoco-maven-plugin:0.8.10:report \
+              -DdataFile=target/jacoco-merged.exec
+          else
+            echo "No jacoco.exec files found; skipping merge."
+          fi
+ 
+      - name: Package release bundle
+        run: |
+          mkdir -p release
+          # Collect all JARs from parallel jobs
+          find artifacts -name "*.jar" -exec cp {} release/ \;
+          ls -la release
+ 
+      # Publish a GitHub Release (uses GITHUB_TOKEN)
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ github.run_number }}"
+          gh release create "$TAG" ./release/*.jar \
+            --notes "Automated release from workflow run ${{ github.run_id }}"
+ 
+      - name: Upload merged coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-merged
+          path: target/site/jacoco/
+ 
+Next is
+ 
+2nd options where we want module to be dynamic then it can be set as below
+ 
+If you prefer not to hard-code module names, discover them first and fan out dynamically:
+ 
+name: Java Maven Dynamic Matrix CI
+ 
+on: [push, pull_request]
+ 
+jobs:
+  discover-modules:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.out.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: List Maven modules as JSON
+        id: out
+        run: |
+          # Extract module names from the root POM
+          MODS=$(xmllint --xpath "string(/project/modules)" pom.xml 2>/dev/null || true)
+          # Fallback for multi-line <modules><module>...</module></modules>
+          MOD_LIST=$(xmllint --xpath "/project/modules/module/text()" pom.xml 2>/dev/null | tr '\n' ' ')
+          echo "Modules: $MOD_LIST"
+          # Build a JSON matrix: { "module": ["m1","m2"] , "java": [17,21], "os":["ubuntu-latest"] }
+          JSON=$(jq -n --arg mods "$MOD_LIST" '
+            { module: ($mods | split(" ") | map(select(length>0))),
+              java: [17,21],
+              os: ["ubuntu-latest"]
+            }')
+          echo "matrix=$JSON" >> $GITHUB_OUTPUT
+ 
+  build-test:
+    needs: discover-modules
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover-modules.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+      - name: Build & test
+        run: mvn -B -pl ${{ matrix.module }} -am clean verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jar-${{ matrix.module }}-jdk${{ matrix.java }}
+          path: "**/${{ matrix.module }}/target/*.jar"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.module }}-jdk${{ matrix.java }}
+          path: "**/${{ matrix.module }}/target/jacoco.exec"
+ 
+This requires xmllint and jq (available on ubuntu-latest) and a standard <modules> section in the parent pom.xml.
+ 
+I feel Raviraj Metri we will need shrading
+ 
+Test sharding (optional)
+If your suite is large, split it across N parallel shards. You can generate per‑shard include lists (classes/packages) with a small script:
+ 
+our suite is large
+ 
+ we try 1st time without sharding
+ 
+Manisha Sahu
+we try 1st time without sharding
+right
+ 
+and can see if we need it or not
+ 
+keep all this examples with you
+ 
+lets go step by step.
+ 
+jobs:
+  shard-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1,2,3,4]           # four parallel shards
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+ 
+      - name: Generate includes for shard
+        run: |
+          # Example: split test classes deterministically
+          TOTAL=4
+          SHARD=${{ matrix.shard }}
+          find . -type f -path "*/src/test/java/*Test.java" \
+            | sort | awk -v total=$TOTAL -v shard=$SHARD 'NR%total==shard-1' \
+            | sed 's#^.*/src/test/java/##; s#/#.#g; s#.java$##' > includes.txt
+          echo "Classes in shard $SHARD:"
+          cat includes.txt
+ 
+      - name: Run tests for shard ${{ matrix.shard }}
+        run: |
+          mvn -B -Dtest=$(paste -sd, includes.txt) -DfailIfNoTests=false test
+ 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: "**/target/jacoco.exec"
+ 
+i m storing all this.
+ 
+Ok, great 
+few more useful details for configuration 
+ Maven configuration for JaCoCo aggregate
+ 
+In a multi-module build, the cleanest approach is to have an aggregator module (often the root) run report-aggregate. Example pom.xml snippet for the parent POM:
+ 
+<build>
+  <plugins>
+    <plugin>
+      <groupId>org.jacoco</groupId>
+      <artifactId>jacoco-maven-plugin</artifactId>
+      <version>0.8.10</version>
+      <executions>
+        <!-- Collect coverage during test phase -->
+        <execution>
+          <id>prepare-agent</id>
+          <goals>
+            <goal>prepare-agent</goal>
+          </goals>
+        </execution>
+        <!-- Aggregate report over submodules -->
+        <execution>
+          <id>report-aggregate</id>
+          <phase>verify</phase>
+          <goals>
+            <goal>report-aggregate</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+<modules>
+  <module>commons</module>
+  <module>api</module>
+  <module>web</module>
+  <module>worker</module>
+</modules>
+ 
+With this in place, the aggregation job can simply run:
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ mvn -B -DskipTests verify
+# aggregated HTML report at: target/site/jacoco-aggregate/index.html
+
+
+Release packaging options
+ 
+GitHub Release via GH CLI (shown above): simple, uses ${{ secrets.GITHUB_TOKEN }}.
+Artifact only: keep JARs as workflow artifacts, download per release.
+Maven Central/Artefactory/Nexus: add a job using your repo credentials (store in Actions Secrets) and run mvn deploy.
+Multi-artifact bundling: zip all JARs and checksums:
+ 
+also we will need to integrate Allure report  here?
+ 
+yes
+ 
+ok
+ 
+mkdir dist && cp release/*.jar dist/
+( cd dist && sha256sum *.jar > checksums.txt && zip -r app-bundle.zip . )
+
+mkdir dist && cp release/*.jar dist/
+( cd dist && sha256sum *.jar > checksums.txt && zip -r app-bundle.zip . )
+
+
+
+If 3 full runs/day → 3 × $7.20 = $21.60/day → ~$432/month (20 business days)
+
+If 5 full runs/day → 5 × $7.20 = $36.00/day → ~$720/month (20 days)
+
+
+========================================================================
+
+
+auto-scaling self-hosted GitHub Actions runners on Azure for your CI/CD pipeline:
+ 
+Azure Virtual Machine Scale Set (VMSS): Automatically adds/removes VMs based on demand.
+GitHub Actions Runner: Installed on each VM instance.
+Azure Load Balancer: Optional for distributing traffic if needed.
+Scaling Logic: Triggered by Azure Monitor metrics or GitHub webhook events.
+ 
+est. cost is
+ 
+VM size: std  ≈ £0.07/hour.
+For 10 VMs during peak (2 hours × 3 runs/day):
+10 × £0.07 × 6 hours/day = £4.20/day.
+Monthly: £4.20 × 30 = ~£126/month (Spot pricing can reduce to ~£40/month).
+ 
+this is cost with self hosted runners
+ 
+let go 1 by 1
+ 
+Add the Allure Maven plugin and ensure your tests emit results (e.g., JUnit 5 with Allure annotations). In your parent POM:
+ 
+<project>
+  <build>
+    <plugins>
+      <!-- Surefire for unit tests -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <useModulePath>false</useModulePath>
+        </configuration>
+      </plugin>
+ 
+      <!-- Failsafe for integration tests (optional) -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.2.5</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+ 
+      <!-- Allure plugin -->
+      <plugin>
+        <groupId>io.qameta.allure</groupId>
+        <artifactId>allure-maven</artifactId>
+        <version>2.12.0</version>
+        <configuration>
+          <!-- Default result directories for surefire/failsafe -->
+          <resultsDirectories>
+            <resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
+          </resultsDirectories>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+ 
+  <dependencies>
+    <!-- JUnit 5 + Allure -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.qameta.allure</groupId>
+      <artifactId>allure-junit5</artifactId>
+      <version>2.27.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
+ 
+Create .github/workflows/ci-allure.yml:
+ 
+Publish to Azure Blob Static Website (private enterprise)
+ 
+name: CI + Allure Report (Azure static site)
+ 
+on:
+  push:
+    branches: [ "main" ]
+ 
+permissions:
+  id-token: write
+  contents: read
+ 
+env:
+  AZURE_STORAGE_ACCOUNT: <storage-account-name>     # static website enabled
+  AZURE_RESOURCE_GROUP: <rg-name>
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_TENANT_ID:       ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_CLIENT_ID:       ${{ secrets.AZURE_CLIENT_ID }}
+ 
+jobs:
+  build-test:
+    runs-on: [ self-hosted, azure, linux, x64 ]    # or ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - run: mvn -B clean verify
+ 
+      - name: Gather Allure results
+        run: |
+          mkdir -p allure-results
+          find . -type d -path "*/target/allure-results" -exec cp -r {} allure-results \;
+ 
+      - name: Install Allure CLI
+        run: |
+          curl -Ls https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz -o allure.tgz
+          tar -xzf allure.tgz
+          sudo mv allure-2.27.0/bin/allure /usr/local/bin/
+ 
+      - name: Download history from Azure (optional)
+        uses: azure/login@v1
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+      - name: Pull current site (to preserve history)
+        run: |
+          az storage blob download-batch \
+            --account-name $AZURE_STORAGE_ACCOUNT \
+            --destination prev-site \
+            --source '$web' || true
+          if [ -d "prev-site/history" ]; then
+            mkdir -p allure-results/history
+            cp -r prev-site/history allure-results/history || true
+          fi
+ 
+      - name: Generate Allure HTML
+        run: |
+          allure generate allure-results -o _site --clean
+          test -f _site/index.html
+ 
+      - name: Publish to Azure Static Website
+        run: |
+          # Upload generated site to $web container
+          az storage blob upload-batch \
+            --account-name $AZURE_STORAGE_ACCOUNT \
+            --destination '$web' \
+            --source _site \
+            --content-type 'text/html'
+          echo "Deployed Allure report to Azure Static Website" >> $GITHUB_STEP_SUMMARY
+ 
+Notes
+ 
+Uses OIDC (azure/login@v1) with your Client/Tenant/Subscription IDs (no PAT).
+Publishes to the special $web container of your Storage account (Static Website enabled).
+Preserves history folder across runs for Allure trend charts.
+ 
+If you shard tests (e.g., 10 runners), ensure each shard writes to its own allure-results and then merge before generating HTML:
+ 
+mkdir -p allure-results
+find shard-* -type d -name "allure-results" -exec cp -r {} allure-results \;
+allure generate allure-results -o _site --clean
+ 
+Allure supports parallel result merging as long as you copy all *.json & attachments into one folder before generation.
+ 
+ 
+ 
+ 

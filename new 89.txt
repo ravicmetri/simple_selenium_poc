@@ -1,0 +1,79 @@
+or create a new repository on the command line
+echo "# sample_selenium_code" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M master
+git remote add origin https://github.com/ravicmetri/sample_selenium_code.git
+git push -u origin master
+
+
+
+
+Raviraj@BSCS-LP-HP-22 MINGW64 /c/github POC
+$ git clone https://github.com/naveenanimation20/PageObjectModel
+Cloning into 'PageObjectModel'...
+remote: Enumerating objects: 553, done.
+remote: Counting objects: 100% (14/14), done.
+remote: Compressing objects: 100% (14/14), done.
+remote: Total 553 (delta 12), reused 0 (delta 0), pack-reused 539 (from 2)
+Receiving objects: 100% (553/553), 4.67 MiB | 5.15 MiB/s, done.
+Resolving deltas: 100% (187/187), done.
+
+Raviraj@BSCS-LP-HP-22 MINGW64 /c/github POC
+$ git init
+Initialized empty Git repository in C:/github POC/.git/
+
+Raviraj@BSCS-LP-HP-22 MINGW64 /c/github POC (master)
+$ git commit -m "first commit"
+On branch master
+
+Initial commit
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        PageObjectModel/
+
+nothing added to commit but untracked files present (use "git add" to track)
+
+Raviraj@BSCS-LP-HP-22 MINGW64 /c/github POC (master)
+$ git add .
+warning: adding embedded git repository: PageObjectModel
+hint: You've added another git repository inside your current repository.
+hint: Clones of the outer repository will not contain the contents of
+hint: the embedded repository and will not know how to obtain it.
+hint: If you meant to add a submodule, use:
+hint:
+hint:   git submodule add <url> PageObjectModel
+hint:
+hint: If you added this path by mistake, you can remove it from the
+hint: index with:
+hint:
+hint:   git rm --cached PageObjectModel
+hint:
+hint: See "git help submodule" for more information.
+hint: Disable this message with "git config set advice.addEmbeddedRepo false"
+
+Raviraj@BSCS-LP-HP-22 MINGW64 /c/github POC (master)
+$ git commit -m "first commit"
+[master (root-commit) acc2dfd] first commit
+ 1 file changed, 1 insertion(+)
+ create mode 160000 PageObjectModel
+
+Raviraj@BSCS-LP-HP-22 MINGW64 /c/github POC (master)
+$ git remote add origin https://github.com/ravicmetri/sample_selenium_code.git
+
+Raviraj@BSCS-LP-HP-22 MINGW64 /c/github POC (master)
+$
+
+==================
+
+very important points
+
+# From your local repo, on branch main
+git pull origin main --allow-unrelated-histories
+# if there are conflicts, fix them, then:
+git add .
+git commit -m "Merge remote main into local main"
+git push -u origin main
+
