@@ -1,0 +1,121 @@
+name: CI - Maven TestNG Selenium (Ubuntu + Allure results in repo root)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      run_headed:
+        description: 'Run Chrome headed using Xvfb (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      # Default: headless. Set RUN_HEADED=true via workflow_dispatch input to run headed (requires Xvfb)
+      RUN_HEADED: ${{ github.event.inputs.run_headed || 'false' }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Cache Maven local repository
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-
+
+      - name: Detect browser / Chrome version (linux)
+        run: |
+          echo "Looking for chrome/chromium..."
+          if command -v google-chrome >/dev/null 2>&1; then
+            v=$(google-chrome --version | awk '{print $3}')
+            echo "google-chrome detected: $v"
+          elif command -v google-chrome-stable >/dev/null 2>&1; then
+            v=$(google-chrome-stable --version | awk '{print $3}')
+            echo "google-chrome-stable detected: $v"
+          elif command -v chromium-browser >/dev/null 2>&1; then
+            v=$(chromium-browser --version | awk '{print $2}')
+            echo "chromium-browser detected: $v"
+          elif command -v chromium >/dev/null 2>&1; then
+            v=$(chromium --version | awk '{print $2}')
+            echo "chromium detected: $v"
+          else
+            echo "No chrome or chromium binary found on runner."
+            v="not-found"
+          fi
+          echo "CHROME_VERSION=$v" >> $GITHUB_ENV
+          echo "CHROME_MAJOR=${v%%.*}" >> $GITHUB_ENV
+          echo "CHROME_VERSION=$v"
+      
+      - name: Show Java & Chrome info
+        run: |
+          java -version || true
+          echo "CHROME_VERSION=$CHROME_VERSION"
+          echo "CHROME_MAJOR=$CHROME_MAJOR"
+
+      - name: Ensure Xvfb available if headed requested
+        if: env.RUN_HEADED == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          echo "Xvfb installed"
+
+      - name: Run Maven tests (headless by default; use RUN_HEADED=true to run headed via Xvfb)
+        run: |
+          # ensure allure writes to repo root: ./allure-results
+          MAVEN_CMD="mvn -B -V -Dallure.results.directory=allure-results clean test"
+          echo "RUN_HEADED=${RUN_HEADED}"
+          if [ "${RUN_HEADED,,}" = "true" ]; then
+            echo "Running under Xvfb (headed emulation)"
+            xvfb-run -a $MAVEN_CMD
+          else
+            echo "Running headless (no X display)"
+            $MAVEN_CMD
+          fi
+        env:
+          # pass CHROME_MAJOR if you use WebDriverManager.browserVersion(...) in Java
+          CHROME_MAJOR: ${{ env.CHROME_MAJOR }}
+
+      - name: Install Allure CLI (Linux)
+        run: |
+          ALLURE_VER="2.29.0"
+          wget -q -O /tmp/allure.zip "https://github.com/allure-framework/allure2/releases/download/${ALLURE_VER}/allure-${ALLURE_VER}.zip"
+          sudo unzip -o /tmp/allure.zip -d /opt/allure
+          echo "/opt/allure/allure-${ALLURE_VER}/bin" >> $GITHUB_PATH
+          allure --version
+
+      - name: Generate Allure Report from ./allure-results (root)
+        run: |
+          if [ -d "allure-results" ]; then
+            echo "Found allure-results. Generating report to ./allure-report..."
+            allure generate allure-results -o allure-report --clean
+            ls -la allure-report || true
+          else
+            echo "No allure-results folder found in repo root - skipping report generation"
+          fi
+
+      - name: Upload Allure results, report and surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: |
+            allure-results/
+            allure-report/
+            target/surefire-reports/
+            target/chromedriver.log
