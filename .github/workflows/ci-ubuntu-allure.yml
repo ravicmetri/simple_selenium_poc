@@ -89,7 +89,7 @@ jobs:
         env:
           CHROME_MAJOR: ${{ env.CHROME_MAJOR }}
 
-      - name: Install Allure CLI (Linux) - immediate use in same step
+      - name: Install Allure CLI (Linux) - persist PATH for subsequent steps
         run: |
           ALLURE_VER="2.29.0"
           wget -q -O /tmp/allure.zip "https://github.com/allure-framework/allure2/releases/download/${ALLURE_VER}/allure-${ALLURE_VER}.zip"
@@ -99,8 +99,11 @@ jobs:
           sudo chmod -R +x "${ALLURE_BIN}"
           # add to PATH for this step/session
           export PATH="${ALLURE_BIN}:$PATH"
-          echo "Allure bin added to PATH: ${ALLURE_BIN}"
-          # verify
+          echo "Allure bin added to PATH for this step: ${ALLURE_BIN}"
+          # persist to future steps
+          echo "${ALLURE_BIN}" >> $GITHUB_PATH
+          # verify availability
+          which allure || true
           allure --version
 
       - name: Generate Allure Report from ./allure-results (root)
