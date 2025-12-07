@@ -1,0 +1,1 @@
+{"uuid":"4f01ed81-aa7b-4e00-b313-8148339e7d0d","name":"com.example.poc.BaseTest.setUp","children":["45753675-2ae4-4c83-97e2-5d735cd21c27"],"description":"","befores":[{"name":"setUp","status":"passed","stage":"finished","description":"","steps":[],"attachments":[],"parameters":[],"start":1765119434820,"stop":1765119436434}],"afters":[],"start":1765119434819,"stop":1765119436435}

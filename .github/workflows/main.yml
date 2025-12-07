@@ -1,4 +1,4 @@
-name: CI - Maven TestNG Selenium
+name: CI - Maven TestNG Selenium (Windows Headed + Allure Results in Root)
 
 on:
   push:
@@ -10,6 +10,7 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -18,7 +19,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
           cache: maven
 
       - name: Cache Maven local repository
@@ -29,14 +30,50 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-m2-
 
-      - name: Run Maven tests
+      - name: Show Chrome version
+        shell: powershell
+        run: |
+          if (Test-Path 'C:\Program Files\Google\Chrome\Application\chrome.exe') {
+            $v = (Get-Item 'C:\Program Files\Google\Chrome\Application\chrome.exe').VersionInfo.ProductVersion
+            Write-Host "Chrome version: $v"
+          } else {
+            Write-Host "Chrome not found!"
+          }
+
+      - name: Run Maven tests (HEADED)
         env:
           CI: true
+          RUN_HEADED: "true"
+          RUN_HEADLESS: "false"
         run: mvn -B -V clean test
 
-      - name: Upload Surefire reports
+      # Install Allure CLI
+      - name: Install Allure CLI
+        shell: powershell
+        run: |
+          $ver = "2.29.0"
+          Invoke-WebRequest -Uri "https://github.com/allure-framework/allure2/releases/download/$ver/allure-$ver.zip" -OutFile "allure.zip"
+          Expand-Archive allure.zip -DestinationPath "C:\allure"
+          Add-Content $env:GITHUB_PATH "C:\allure\allure-$ver\bin"
+
+      # Generate Allure report from ROOT FOLDER (./allure-results)
+      - name: Generate Allure Report
+        shell: powershell
+        run: |
+          if (Test-Path "allure-results") {
+            Write-Host "Generating Allure report from ./allure-results..."
+            allure generate allure-results -o allure-report --clean
+          } else {
+            Write-Host "No allure-results folder found!"
+          }
+
+      - name: Upload Allure Results + Report + Surefire Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
-          path: target/surefire-reports/
+          name: allure-and-test-reports
+          path: |
+            allure-results/
+            allure-report/
+            target/surefire-reports/
+            target/chromedriver.log
