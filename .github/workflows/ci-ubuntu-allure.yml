@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI: true
-      # Default: headless. Set RUN_HEADED=true via workflow_dispatch input to run headed (requires Xvfb)
       RUN_HEADED: ${{ github.event.inputs.run_headed || 'false' }}
 
     steps:
@@ -61,7 +60,7 @@ jobs:
           echo "CHROME_VERSION=$v" >> $GITHUB_ENV
           echo "CHROME_MAJOR=${v%%.*}" >> $GITHUB_ENV
           echo "CHROME_VERSION=$v"
-      
+
       - name: Show Java & Chrome info
         run: |
           java -version || true
@@ -88,15 +87,20 @@ jobs:
             $MAVEN_CMD
           fi
         env:
-          # pass CHROME_MAJOR if you use WebDriverManager.browserVersion(...) in Java
           CHROME_MAJOR: ${{ env.CHROME_MAJOR }}
 
-      - name: Install Allure CLI (Linux)
+      - name: Install Allure CLI (Linux) - immediate use in same step
         run: |
           ALLURE_VER="2.29.0"
           wget -q -O /tmp/allure.zip "https://github.com/allure-framework/allure2/releases/download/${ALLURE_VER}/allure-${ALLURE_VER}.zip"
           sudo unzip -o /tmp/allure.zip -d /opt/allure
-          echo "/opt/allure/allure-${ALLURE_VER}/bin" >> $GITHUB_PATH
+          ALLURE_BIN="/opt/allure/allure-${ALLURE_VER}/bin"
+          # ensure scripts are executable
+          sudo chmod -R +x "${ALLURE_BIN}"
+          # add to PATH for this step/session
+          export PATH="${ALLURE_BIN}:$PATH"
+          echo "Allure bin added to PATH: ${ALLURE_BIN}"
+          # verify
           allure --version
 
       - name: Generate Allure Report from ./allure-results (root)
